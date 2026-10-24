@@ -232,6 +232,34 @@ class AppleCalendarPlugin(BasePlugin):
                 lines[-1] = lines[-1][:-1]
         return lines[:max_lines]
 
+    def _fit_header(self, draw: ImageDraw.ImageDraw, text: str, width: int) -> str:
+        """Fit header text while reserving space for the calendar icon."""
+        max_width = max(width - 13, 8)
+        fitted = text
+        while fitted and draw.textbbox((0, 0), fitted, font=self.header_font)[2] > max_width:
+            fitted = fitted[:-1].rstrip()
+        return fitted
+
+    def _draw_calendar_icon(self, draw: ImageDraw.ImageDraw, width: int) -> None:
+        """Draw an 8x8 pixel calendar glyph in the top-right corner."""
+        x = max(width - 9, 0)
+        y = 1
+        c = self.header_color
+
+        # Calendar body and header divider.
+        draw.rectangle((x, y + 1, x + 7, y + 7), outline=c)
+        draw.line((x, y + 3, x + 7, y + 3), fill=c)
+
+        # Two binding tabs.
+        draw.line((x + 2, y, x + 2, y + 2), fill=c)
+        draw.line((x + 5, y, x + 5, y + 2), fill=c)
+
+        # Tiny date marks.
+        draw.point((x + 2, y + 5), fill=c)
+        draw.point((x + 4, y + 5), fill=c)
+        draw.point((x + 2, y + 6), fill=c)
+        draw.point((x + 4, y + 6), fill=c)
+
     def display(self, force_clear: bool = False) -> None:
         width = getattr(self.display_manager, "width", 128)
         height = getattr(self.display_manager, "height", 32)
@@ -239,12 +267,14 @@ class AppleCalendarPlugin(BasePlugin):
         draw = ImageDraw.Draw(image)
 
         if not self.calendar_url:
-            draw.text((1, 2), "Apple Calendar", font=self.header_font,
+            header = self._fit_header(draw, "Apple Calendar", width)
+            draw.text((1, 2), header, font=self.header_font,
                       fill=self.header_color)
             draw.text((1, 15), "Set calendar URL", font=self.title_font,
                       fill=(255, 255, 255))
         elif not self.events:
-            draw.text((1, 2), "APPLE CAL", font=self.header_font,
+            header = self._fit_header(draw, "APPLE CAL", width)
+            draw.text((1, 2), header, font=self.header_font,
                       fill=self.header_color)
             draw.text((1, 15), "No upcoming events", font=self.title_font,
                       fill=(220, 220, 220))
@@ -263,6 +293,7 @@ class AppleCalendarPlugin(BasePlugin):
                 header = start.strftime("%a %d %b").upper() + "  ALL DAY"
             else:
                 header = start.strftime("%a %d %b  %H:%M").upper()
+            header = self._fit_header(draw, header, width)
             draw.text((1, 1), header, font=self.header_font,
                       fill=self.header_color)
             lines = self._wrap_title(
@@ -274,6 +305,7 @@ class AppleCalendarPlugin(BasePlugin):
                           fill=(255, 255, 255))
                 y += 9
 
+        self._draw_calendar_icon(draw, width)
         self.display_manager.image = image
         self.display_manager.update_display()
 
