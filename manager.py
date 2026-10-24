@@ -4,20 +4,17 @@ Fetches a published Apple/iCloud calendar feed and renders upcoming events on
 small LED matrices such as 128x32 panels.
 """
 
-import logging
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from zoneinfo import ZoneInfo
 
 import requests
-from icalendar import Calendar
 from dateutil.rrule import rrulestr
+from icalendar import Calendar
 from PIL import Image, ImageDraw, ImageFont
 
 from src.plugin_system.base_plugin import BasePlugin, VegasDisplayMode
-
-logger = logging.getLogger(__name__)
 
 
 class AppleCalendarPlugin(BasePlugin):
@@ -60,29 +57,41 @@ class AppleCalendarPlugin(BasePlugin):
         try:
             fm = getattr(self.plugin_manager, "font_manager", None)
             if fm:
-                fm.register_manager_font(self.plugin_id, f"{self.plugin_id}.header", "four_by_six", 8, (255, 200, 100))
-                fm.register_manager_font(self.plugin_id, f"{self.plugin_id}.title", "press_start", 8, (255, 255, 255))
+                fm.register_manager_font(
+                    manager_id=self.plugin_id,
+                    element_key=f"{self.plugin_id}.header",
+                    family="four_by_six",
+                    size_px=8,
+                    color=(255, 200, 100),
+                )
+                fm.register_manager_font(
+                    manager_id=self.plugin_id,
+                    element_key=f"{self.plugin_id}.title",
+                    family="press_start",
+                    size_px=8,
+                    color=(255, 255, 255),
+                )
         except Exception as exc:
             self.logger.debug("Could not register fonts: %s", exc)
 
-    def _normalise_dt(self, value: Any, all_day: bool = False) -> datetime:
+    def _normalise_dt(self, value: Any) -> datetime:
         if isinstance(value, datetime):
             if value.tzinfo is None:
                 return value.replace(tzinfo=self.local_tz)
             return value.astimezone(self.local_tz)
-        # icalendar date values are date-like but not datetime.
         return datetime(value.year, value.month, value.day, tzinfo=self.local_tz)
 
-    def _expand_event(self, component, window_start: datetime, window_end: datetime) -> List[Dict[str, Any]]:
+    def _expand_event(self, component, window_start: datetime,
+                      window_end: datetime) -> List[Dict[str, Any]]:
         dtstart_raw = component.decoded("DTSTART")
         all_day = not isinstance(dtstart_raw, datetime)
         if all_day and not self.show_all_day:
             return []
 
-        start = self._normalise_dt(dtstart_raw, all_day)
+        start = self._normalise_dt(dtstart_raw)
         dtend_prop = component.get("DTEND")
         if dtend_prop:
-            end = self._normalise_dt(dtend_prop.dt, all_day)
+            end = self._normalise_dt(dtend_prop.dt)
         else:
             end = start + (timedelta(days=1) if all_day else timedelta(hours=1))
 
@@ -101,6 +110,14 @@ class AppleCalendarPlugin(BasePlugin):
                 self.logger.warning("Could not expand recurring event %s: %s", title, exc)
                 starts = [start]
 
+        rdates = component.get("RDATE")
+        if rdates:
+            if not isinstance(rdates, list):
+                rdates = [rdates]
+            for rdate in rdates:
+                for item in rdate.dts:
+                    starts.append(self._normalise_dt(item.dt))
+
         excluded = set()
         exdates = component.get("EXDATE")
         if exdates:
@@ -108,13 +125,15 @@ class AppleCalendarPlugin(BasePlugin):
                 exdates = [exdates]
             for exdate in exdates:
                 for item in exdate.dts:
-                    excluded.add(self._normalise_dt(item.dt, all_day))
+                    excluded.add(self._normalise_dt(item.dt))
 
         result = []
+        seen = set()
         for occurrence_start in starts:
-            occurrence_start = self._normalise_dt(occurrence_start, all_day)
-            if occurrence_start in excluded:
+            occurrence_start = self._normalise_dt(occurrence_start)
+            if occurrence_start in excluded or occurrence_start in seen:
                 continue
+            seen.add(occurrence_start)
             occurrence_end = occurrence_start + duration
             if occurrence_end < window_start or occurrence_start > window_end:
                 continue
@@ -135,8 +154,12 @@ class AppleCalendarPlugin(BasePlugin):
 
         now = datetime.now(self.local_tz)
         window_end = now + timedelta(days=self.lookahead_days)
+        fetch_url = self.calendar_url
+        if fetch_url.lower().startswith("webcal://"):
+            fetch_url = "https://" + fetch_url[len("webcal://"):]
+
         response = requests.get(
-            self.calendar_url,
+            fetch_url,
             timeout=self.request_timeout,
             headers={"User-Agent": "LEDMatrix-Apple-Calendar/1.0"},
         )
@@ -150,11 +173,12 @@ class AppleCalendarPlugin(BasePlugin):
             except Exception as exc:
                 self.logger.warning("Skipping malformed calendar event: %s", exc)
 
-        # Keep events that are ongoing or upcoming, ordered chronologically.
         events = [event for event in events if event["end"] >= now]
         events.sort(key=lambda event: event["start"])
         self.events = events[: self.max_events]
-        self.current_event_index = min(self.current_event_index, max(len(self.events) - 1, 0))
+        self.current_event_index = min(
+            self.current_event_index, max(len(self.events) - 1, 0)
+        )
 
     def update(self) -> None:
         now = time.time()
@@ -171,7 +195,8 @@ class AppleCalendarPlugin(BasePlugin):
             self.current_event_index = (self.current_event_index + 1) % len(self.events)
             self.last_rotation = now
 
-    def _wrap_title(self, draw: ImageDraw.ImageDraw, text: str, width: int, max_lines: int = 2) -> List[str]:
+    def _wrap_title(self, draw: ImageDraw.ImageDraw, text: str,
+                    width: int, max_lines: int = 2) -> List[str]:
         words = text.split()
         lines: List[str] = []
         current = ""
@@ -187,8 +212,9 @@ class AppleCalendarPlugin(BasePlugin):
                     break
         if current and len(lines) < max_lines:
             lines.append(current)
-        if len(lines) == max_lines and words:
-            while draw.textbbox((0, 0), lines[-1], font=self.title_font)[2] > width and len(lines[-1]) > 1:
+        if len(lines) == max_lines and lines:
+            while (draw.textbbox((0, 0), lines[-1], font=self.title_font)[2] > width
+                   and len(lines[-1]) > 1):
                 lines[-1] = lines[-1][:-1]
         return lines[:max_lines]
 
@@ -199,11 +225,15 @@ class AppleCalendarPlugin(BasePlugin):
         draw = ImageDraw.Draw(image)
 
         if not self.calendar_url:
-            draw.text((1, 2), "Apple Calendar", font=self.header_font, fill=(255, 200, 100))
-            draw.text((1, 15), "Set calendar URL", font=self.title_font, fill=(255, 255, 255))
+            draw.text((1, 2), "Apple Calendar", font=self.header_font,
+                      fill=(255, 200, 100))
+            draw.text((1, 15), "Set calendar URL", font=self.title_font,
+                      fill=(255, 255, 255))
         elif not self.events:
-            draw.text((1, 2), "APPLE CAL", font=self.header_font, fill=(255, 200, 100))
-            draw.text((1, 15), "No upcoming events", font=self.title_font, fill=(220, 220, 220))
+            draw.text((1, 2), "APPLE CAL", font=self.header_font,
+                      fill=(255, 200, 100))
+            draw.text((1, 15), "No upcoming events", font=self.title_font,
+                      fill=(220, 220, 220))
         else:
             event = self.events[self.current_event_index]
             start = event["start"].astimezone(self.local_tz)
@@ -211,17 +241,20 @@ class AppleCalendarPlugin(BasePlugin):
                 header = start.strftime("%a %d %b").upper() + "  ALL DAY"
             else:
                 header = start.strftime("%a %d %b  %H:%M").upper()
-            draw.text((1, 1), header, font=self.header_font, fill=(255, 200, 100))
-            lines = self._wrap_title(draw, event["title"], max(width - 2, 8), max_lines=2)
+            draw.text((1, 1), header, font=self.header_font,
+                      fill=(255, 200, 100))
+            lines = self._wrap_title(
+                draw, event["title"], max(width - 2, 8), max_lines=2
+            )
             y = 13
             for line in lines:
-                draw.text((1, y), line, font=self.title_font, fill=(255, 255, 255))
+                draw.text((1, y), line, font=self.title_font,
+                          fill=(255, 255, 255))
                 y += 9
 
-        if hasattr(self.display_manager, "display_image"):
-            self.display_manager.display_image(image)
-        elif hasattr(self.display_manager, "image"):
-            self.display_manager.image(image)
+        # LEDMatrix plugins render into the manager's back buffer, then swap it.
+        self.display_manager.image = image
+        self.display_manager.update_display()
 
     def get_vegas_display_mode(self):
         return VegasDisplayMode.CONTENT
@@ -230,9 +263,11 @@ class AppleCalendarPlugin(BasePlugin):
         return "calendar"
 
     def get_info(self) -> Dict[str, Any]:
-        return {
+        info = super().get_info()
+        info.update({
             "name": "Apple Calendar",
             "events_loaded": len(self.events),
             "configured": bool(self.calendar_url),
             "timezone": self.timezone_name,
-        }
+        })
+        return info
