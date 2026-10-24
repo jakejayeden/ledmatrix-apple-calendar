@@ -49,6 +49,7 @@ class AppleCalendarPlugin(BasePlugin):
         super().on_config_change(new_config)
         self._read_settings(self.config)
         self.last_fetch = 0.0
+        self.last_rotation = time.time()
         self._load_fonts()
 
     def _load_fonts(self) -> None:
@@ -181,6 +182,7 @@ class AppleCalendarPlugin(BasePlugin):
         )
 
     def update(self) -> None:
+        """Refresh calendar data when the plugin scheduler calls update()."""
         now = time.time()
         if now - self.last_fetch >= self.update_interval:
             try:
@@ -190,10 +192,6 @@ class AppleCalendarPlugin(BasePlugin):
                 # Preserve the last successful event list during network failures.
                 self.logger.error("Failed to refresh Apple Calendar feed: %s", exc)
                 self.last_fetch = now
-
-        if self.events and now - self.last_rotation >= self.rotation_interval:
-            self.current_event_index = (self.current_event_index + 1) % len(self.events)
-            self.last_rotation = now
 
     def _wrap_title(self, draw: ImageDraw.ImageDraw, text: str,
                     width: int, max_lines: int = 2) -> List[str]:
@@ -235,6 +233,16 @@ class AppleCalendarPlugin(BasePlugin):
             draw.text((1, 15), "No upcoming events", font=self.title_font,
                       fill=(220, 220, 220))
         else:
+            # LEDMatrix repaints active plugins frequently, while update() is
+            # scheduler-driven. Rotate here so event changes happen on time.
+            current_time = time.time()
+            if current_time - self.last_rotation >= self.rotation_interval:
+                self.current_event_index = (self.current_event_index + 1) % len(self.events)
+                self.last_rotation = current_time
+
+            if self.current_event_index >= len(self.events):
+                self.current_event_index = 0
+
             event = self.events[self.current_event_index]
             start = event["start"].astimezone(self.local_tz)
             if event["all_day"]:
