@@ -1,0 +1,63 @@
+{
+  "type": "object",
+  "properties": {
+    "enabled": {
+      "type": "boolean",
+      "title": "Enabled",
+      "default": true
+    },
+    "calendar_url": {
+      "type": "string",
+      "title": "Apple Calendar ICS URL",
+      "description": "Paste the published iCloud/Apple Calendar webcal:// or https:// ICS URL. Keep this URL private.",
+      "default": "",
+      "x-sensitive": true
+    },
+    "timezone": {
+      "type": "string",
+      "title": "Timezone",
+      "default": "Europe/London"
+    },
+    "max_events": {
+      "type": "integer",
+      "title": "Maximum events",
+      "minimum": 1,
+      "maximum": 20,
+      "default": 5
+    },
+    "show_all_day_events": {
+      "type": "boolean",
+      "title": "Show all-day events",
+      "default": true
+    },
+    "lookahead_days": {
+      "type": "integer",
+      "title": "Look ahead (days)",
+      "minimum": 1,
+      "maximum": 365,
+      "default": 30
+    },
+    "update_interval": {
+      "type": "number",
+      "title": "Refresh interval (seconds)",
+      "minimum": 60,
+      "default": 900,
+      "x-advanced": true
+    },
+    "event_rotation_interval": {
+      "type": "number",
+      "title": "Event rotation interval (seconds)",
+      "minimum": 2,
+      "default": 10
+    },
+    "request_timeout": {
+      "type": "number",
+      "title": "Network timeout (seconds)",
+      "minimum": 1,
+      "maximum": 60,
+      "default": 15,
+      "x-advanced": true
+    }
+  },
+  "required": []
+}
