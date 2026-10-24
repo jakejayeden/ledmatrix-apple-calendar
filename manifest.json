@@ -1,0 +1,23 @@
+{
+  "id": "apple-calendar",
+  "name": "Apple Calendar",
+  "version": "1.0.0",
+  "author": "jakejayeden",
+  "description": "Display upcoming events from a published Apple/iCloud iCalendar feed on LEDMatrix.",
+  "category": "productivity",
+  "tags": ["calendar", "apple", "icloud", "ics", "events"],
+  "entry_point": "manager.py",
+  "class_name": "AppleCalendarPlugin",
+  "config_schema": "config_schema.json",
+  "display_modes": ["calendar"],
+  "versions": [
+    {
+      "version": "1.0.0",
+      "released": "2026-10-24",
+      "ledmatrix_min_version": "3.3.0",
+      "notes": "Initial release with Apple/iCloud ICS feed support, recurring events, all-day events, event rotation, configurable lookahead and timezone support."
+    }
+  ],
+  "last_updated": "2026-10-24",
+  "compatible_versions": [">=3.3.0"]
+}
