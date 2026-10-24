@@ -20,6 +20,8 @@ from src.plugin_system.base_plugin import BasePlugin, VegasDisplayMode
 class AppleCalendarPlugin(BasePlugin):
     """Display upcoming events from an Apple/iCloud published ICS feed."""
 
+    DEFAULT_HEADER_COLOR = "#149FD9"
+
     def __init__(self, plugin_id: str, config: Dict[str, Any],
                  display_manager, cache_manager, plugin_manager):
         super().__init__(plugin_id, config, display_manager, cache_manager, plugin_manager)
@@ -30,6 +32,19 @@ class AppleCalendarPlugin(BasePlugin):
         self._read_settings(config)
         self._load_fonts()
 
+    @staticmethod
+    def _parse_hex_color(value: Any, fallback=(20, 159, 217)):
+        """Convert #RRGGBB (or RRGGBB) to an RGB tuple."""
+        if not isinstance(value, str):
+            return fallback
+        hex_value = value.strip().lstrip("#")
+        if len(hex_value) != 6:
+            return fallback
+        try:
+            return tuple(int(hex_value[i:i + 2], 16) for i in (0, 2, 4))
+        except ValueError:
+            return fallback
+
     def _read_settings(self, config: Dict[str, Any]) -> None:
         self.calendar_url = (config.get("calendar_url") or "").strip()
         self.max_events = int(config.get("max_events", 5))
@@ -39,6 +54,8 @@ class AppleCalendarPlugin(BasePlugin):
         self.lookahead_days = int(config.get("lookahead_days", 30))
         self.request_timeout = float(config.get("request_timeout", 15))
         self.timezone_name = config.get("timezone", "Europe/London")
+        self.header_color_hex = config.get("header_color", self.DEFAULT_HEADER_COLOR)
+        self.header_color = self._parse_hex_color(self.header_color_hex)
         try:
             self.local_tz = ZoneInfo(self.timezone_name)
         except Exception:
@@ -63,7 +80,7 @@ class AppleCalendarPlugin(BasePlugin):
                     element_key=f"{self.plugin_id}.header",
                     family="four_by_six",
                     size_px=8,
-                    color=(255, 200, 100),
+                    color=self.header_color,
                 )
                 fm.register_manager_font(
                     manager_id=self.plugin_id,
@@ -189,7 +206,6 @@ class AppleCalendarPlugin(BasePlugin):
                 self._fetch_events()
                 self.last_fetch = now
             except Exception as exc:
-                # Preserve the last successful event list during network failures.
                 self.logger.error("Failed to refresh Apple Calendar feed: %s", exc)
                 self.last_fetch = now
 
@@ -224,17 +240,15 @@ class AppleCalendarPlugin(BasePlugin):
 
         if not self.calendar_url:
             draw.text((1, 2), "Apple Calendar", font=self.header_font,
-                      fill=(255, 200, 100))
+                      fill=self.header_color)
             draw.text((1, 15), "Set calendar URL", font=self.title_font,
                       fill=(255, 255, 255))
         elif not self.events:
             draw.text((1, 2), "APPLE CAL", font=self.header_font,
-                      fill=(255, 200, 100))
+                      fill=self.header_color)
             draw.text((1, 15), "No upcoming events", font=self.title_font,
                       fill=(220, 220, 220))
         else:
-            # LEDMatrix repaints active plugins frequently, while update() is
-            # scheduler-driven. Rotate here so event changes happen on time.
             current_time = time.time()
             if current_time - self.last_rotation >= self.rotation_interval:
                 self.current_event_index = (self.current_event_index + 1) % len(self.events)
@@ -250,7 +264,7 @@ class AppleCalendarPlugin(BasePlugin):
             else:
                 header = start.strftime("%a %d %b  %H:%M").upper()
             draw.text((1, 1), header, font=self.header_font,
-                      fill=(255, 200, 100))
+                      fill=self.header_color)
             lines = self._wrap_title(
                 draw, event["title"], max(width - 2, 8), max_lines=2
             )
@@ -260,7 +274,6 @@ class AppleCalendarPlugin(BasePlugin):
                           fill=(255, 255, 255))
                 y += 9
 
-        # LEDMatrix plugins render into the manager's back buffer, then swap it.
         self.display_manager.image = image
         self.display_manager.update_display()
 
@@ -277,5 +290,6 @@ class AppleCalendarPlugin(BasePlugin):
             "events_loaded": len(self.events),
             "configured": bool(self.calendar_url),
             "timezone": self.timezone_name,
+            "header_color": self.header_color_hex,
         })
         return info
