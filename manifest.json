@@ -1,7 +1,7 @@
 {
   "id": "apple-calendar",
   "name": "Apple Calendar",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "author": "jakejayeden",
   "description": "Display upcoming events from a published Apple/iCloud iCalendar feed on LEDMatrix.",
   "category": "productivity",
@@ -11,6 +11,12 @@
   "config_schema": "config_schema.json",
   "display_modes": ["calendar"],
   "versions": [
+    {
+      "version": "1.0.3",
+      "released": "2026-10-24",
+      "ledmatrix_min_version": "3.3.0",
+      "notes": "Add a small pixel calendar icon in the top-right of the header, using the configured header colour and reserving header space to avoid overlap."
+    },
     {
       "version": "1.0.2",
       "released": "2026-10-24",
