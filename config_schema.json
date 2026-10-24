@@ -18,6 +18,13 @@
       "title": "Timezone",
       "default": "Europe/London"
     },
+    "header_color": {
+      "type": "string",
+      "title": "Date header colour",
+      "description": "Colour used for the date/time header.",
+      "default": "#149FD9",
+      "x-widget": "color-picker"
+    },
     "max_events": {
       "type": "integer",
       "title": "Maximum events",
