@@ -1,0 +1,11 @@
+{
+  "enabled": true,
+  "calendar_url": "https://example.invalid/your-private-calendar.ics",
+  "timezone": "Europe/London",
+  "max_events": 5,
+  "show_all_day_events": true,
+  "lookahead_days": 30,
+  "update_interval": 900,
+  "event_rotation_interval": 10,
+  "request_timeout": 15
+}
